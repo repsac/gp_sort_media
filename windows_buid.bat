@@ -1,0 +1,1 @@
+pyinstaller.exe --onefile .\gp_sort_media.py --distpath .\dist\windows
