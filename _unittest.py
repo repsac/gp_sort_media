@@ -24,117 +24,17 @@ def unittest():
     # like what you would find on a GP's memory card (100GOPRO)
     _test_folder_path()
 
-    # test passing through specific LRV files
-    _test_lrv_files()
-
-    # test passing through specific THM files
-    _test_thm_files()
-
-    # test passing through specific unsupport files
-    _test_unsupported_files()
-
-
-def _test_unsupported_files():
-    """
-    test that file types that are not supported for conform
-    (conform only applied to THM and LRV)
-    do indeed result in an exception being raised
-    """
-    tmpdir = tempfile.mkdtemp()
-
-    # I am wrapping this in its own try/except because
-    # we are writing files to disk and there is a possiblity
-    # that we could trigger an IOError in a different context
-    try:
-        nodes = _create_loose_test_files(
-            tmpdir,
-            ((MP4, gp_sort_media.HIRES, GH),),
-            gp_sort_media.HIRES)
-    except:
-        shutil.rmtree(tmpdir)
-        raise
-
-    passed = False
-    try:
-        gp_sort_media.conform_files(nodes)
-    except IOError:
-        # if this specific exception came up then we're good
-        passed = True
-    finally:
-        shutil.rmtree(tmpdir)
-
-    assert passed, "Failed to detected unsupported file types"
-
-
-def _test_thm_files():
-    """
-    test that the THM files were renamed to have JPG extensions
-    """
-    tmpdir = tempfile.mkdtemp()
-    try:
-        _renamed_thm_files(tmpdir)
-    finally:
-        shutil.rmtree(tmpdir)
-
-
-def _test_lrv_files():
-    """
-    the first test is to test that all LRV files were
-    conformed to match the naming convention  of the MP4 files
-
-    the second test is to address conflicts that may happen
-    if someone is trying to conform LRV files livining in
-    the same folder as the corresponding MP4 files
-    """
-    for func in (_renamed_lrv_files,
-                 _renamed_lrv_files_with_conflict):
-
-        tmpdir = tempfile.mkdtemp()
-        try:
-            func(tmpdir)
-        finally:
-            shutil.rmtree(tmpdir)
-
 
 def _create_loose_test_files(tmpdir, mapping, key):
     nodes = _touch_paths(tmpdir, 1, 6, mapping)
     return [os.path.join(tmpdir, x) for x in nodes[key]]
 
 
-def _renamed_lrv_files_with_conflict(tmpdir):
-    """
-    Test that if a conformed LRV file is going to clash with
-    the corresponding MP4 in the same directory.
-    Conforms with LRV should not occur in the same path as the
-    source MP4 files.
-
-    checking for FileExistsError exception
-    """
-    # create the LRV nodes
-    nodes = _create_loose_test_files(
-        tmpdir,
-        ((LRV, gp_sort_media.PROXY, GL),),
-        gp_sort_media.PROXY)
-
-    # create the conflicting file
-    mapping = ((MP4, gp_sort_media.HIRES, GH),)
-    _touch_paths(tmpdir, 5, 6, mapping)
-
-    passed = False
-    try:
-        gp_sort_media.conform_files(nodes)
-    except FileExistsError:
-        # if this specific exception came up then we're good
-        passed = True
-
-    assert passed, "Failed to detected existing file"
-
-
 def _renamed_files(tmpdir, mapping, key, ext):
     # create the loose files for testing
-    nodes =_create_loose_test_files(tmpdir, mapping, key)
+    _create_loose_test_files(tmpdir, mapping, key)
     # pass them in for conforming
-    gp_sort_media.conform_files(nodes)
+    #gp_sort_media.conform_files(nodes)
 
     # the actual nodes in the test directory
     actual = os.listdir(tmpdir)
@@ -146,22 +46,6 @@ def _renamed_files(tmpdir, mapping, key, ext):
             ext, expected, actual
         )
     assert expected == actual, error
-
-
-def _renamed_thm_files(tmpdir):
-    _renamed_files(
-        tmpdir,
-        ((THM, gp_sort_media.THUMB, GH),),
-        gp_sort_media.THUMB,
-        JPG)
-
-
-def _renamed_lrv_files(tmpdir):
-    _renamed_files(
-        tmpdir,
-        ((LRV, gp_sort_media.PROXY, GL),),
-        gp_sort_media.PROXY,
-        MP4)
 
 
 def _test_folder_path():
@@ -214,8 +98,8 @@ def _create_test_nodes(tmpdir):
 
     # locate the LRV and THM files and rename them in a way that
     # they will be expected to be after conforming is complete
-    for key, prop in ((gp_sort_media.PROXY, gp_sort_media.LRV_PROPERTIES ),
-                      (gp_sort_media.THUMB, gp_sort_media.THM_PROPERTIES)):
+    for key, prop in ((gp_sort_media.PROXY, ('GH{}.MP4', 2)),
+                      (gp_sort_media.THUMB, ('{}.JPG', 0))):
 
         for index, each in enumerate(nodes[key]):
             each = os.path.splitext(each)[0]

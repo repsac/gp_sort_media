@@ -9,28 +9,8 @@ HIRES = 'HIRES'
 PROXY = 'PROXY'
 THUMB = 'THUMBNAILS'
 
-LRV_PROPERTIES = ('GH{}.MP4', 2)
-THM_PROPERTIES = ('{}.JPG', 0)
-
 _IN_CONSOLE = False
 _LOGGER = []
-
-
-def conform_files(files):
-    """
-    Given a list of files, conform the files in place.
-    Supported types: LVR, THM
-
-    Make sure to not conform LVR files in the same directory
-    as the corresponding MP4 file
-
-    :param files: list of file names
-    """
-    if isinstance(files, str):
-        files = (files,)
-
-    for fi in files:
-        _process_file(os.path.abspath(fi))
 
 
 def sort_media(path):
@@ -44,14 +24,7 @@ def sort_media(path):
     path = os.path.abspath(path)
     _sort_dir(path)
     _conform_paths(path)
-
-
-def conform_lrv_file(path):
-    return _rename_file(path, *LRV_PROPERTIES)
-
-
-def conform_thm_file(path):
-    return _rename_file(path, *THM_PROPERTIES)
+    _rename_files(path)
 
 
 def _process_file(path):
@@ -87,6 +60,34 @@ def _rename_file(src, fmt, index):
     return dst
 
 
+def _rename_files(path):   
+    thm = os.path.join(path, THUMB)
+    if os.path.exists(thm):
+        for each in os.listdir(thm):
+            _rename_file(os.path.join(thm, each), '{}.JPG', 0)
+    
+    hires = os.path.join(path, HIRES)
+    if not os.path.exists(hires):
+        return
+    
+    table = {}
+    for each in os.listdir(hires):
+        table[os.path.splitext(each)[0][2:]] = each
+
+    proxy = os.path.join(path, PROXY)
+    for each in os.listdir(proxy):
+        try:
+            sibling = table[os.path.splitext(each)[0][2:]]
+        except KeyError:
+            error = "Did not find hires for proxy media '{}'".format(each)
+            raise IOError(error)
+        
+        src = os.path.join(proxy, each)
+        dst = os.path.join(proxy, sibling)
+        _print("Renaming {} > {}".format(src, dst))
+        os.rename(src, dst)
+
+
 def _conform_mp4_path(path):
     """
     Rename the MP4 path to 'HIRES'
@@ -100,12 +101,7 @@ def _conform_lrv_path(path):
     and then rename each .LRV file to end in .MP4
     and changed the prefix from 'GL' to 'GH'
     """
-    path = _rename_folder(path, PROXY)
-
-    for each in os.listdir(path):
-        _rename_file(os.path.join(path, each), *LRV_PROPERTIES)
-    
-    return path
+    return _rename_folder(path, PROXY)
 
 
 def _conform_thm_path(path):
@@ -113,12 +109,7 @@ def _conform_thm_path(path):
     Conform a THM folder by renaming it to 'THUMBNAILS'
     and then rename each .THM file to end in .JPG
     """
-    path = _rename_folder(path, THUMB)
-
-    for each in os.listdir(path):
-        _rename_file(os.path.join(path, each), *THM_PROPERTIES)
-
-    return path
+    return _rename_folder(path, THUMB)
 
 
 def _rename_folder(src, dst):
@@ -154,16 +145,17 @@ def _sort_dir(path):
 
     _print("Sorting GoPro media in: {}".format(path))
 
-    for each in os.listdir(path):
-        # extract the extension and strip off the '.'
-        ext = os.path.splitext(each)[1][1:]
-        # create the extensions subdirectory
-        _mkdir(os.path.join(path, ext))
-        # move the current file to the new subdirectory
-        src = os.path.join(path, each)
-        dst = os.path.join(path, ext)
-        _print("Moving {} > {}".format(src, dst))
-        shutil.move(src, dst)
+    for level in os.walk(path):
+        for fi in level[2]:
+            # extract the extension and strip off the '.'
+            ext = os.path.splitext(fi)[1][1:]
+            # create the extensions subdirectory
+            _mkdir(os.path.join(level[0], ext))
+            # move the current file to the new subdirectory
+            src = os.path.join(level[0], fi)
+            dst = os.path.join(level[0], ext)
+            _print("Moving {} > {}".format(src, dst))
+            shutil.move(src, dst)
 
 
 def _mkdir(path):
@@ -184,26 +176,6 @@ def _print(msg):
         _LOGGER.append(msg)
 
 
-def _sort_input(arg_input):
-
-    table = (
-        (os.path.isdir, []),
-        (os.path.isfile, [])
-    )
-
-    for each in arg_input:
-        for func, array in table:
-            each = os.path.abspath(each)
-            if func(each):
-                array.append(each)
-                break
-        else:
-            error = "Unsopported node type '{}'".format(each)
-            raise IOError(error)
-    
-    return table
-
-
 def _main():
     global _IN_CONSOLE
     global _LOGGER
@@ -211,14 +183,11 @@ def _main():
     _IN_CONSOLE = True
 
     args = _parse_args()
-    nodes = _sort_input(args.input)
 
     message = "Press ENTER to exit console."
     try:
-        for node in nodes[0][1]:
+        for node in args.input:
             sort_media(node)
-        if nodes[1][1]:
-            conform_files(nodes[1][1])
     except:
         fname = "{}.{}.error".format(
             os.path.splitext(__file__)[0],
